@@ -1,0 +1,26 @@
+project:
+  name: airline-operations-revenue-platform
+  environment: dev
+
+gcp:
+  project_id: YOUR_GCP_PROJECT_ID
+  region: asia-south1
+  storage_bucket: YOUR_GCS_BUCKET
+
+bigquery:
+  dataset: airline_dev
+  location: asia-south1
+
+spark:
+  app_name: airline-data-processing
+  master: local[*]
+
+  executor_memory: 4g
+  driver_memory: 4g
+
+data:
+  start_date: "2025-01-01"
+  end_date: "2025-12-31"
+
+  target_volume_gb: 100
+  development_volume_gb: 2

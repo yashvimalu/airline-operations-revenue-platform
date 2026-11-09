@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.idea/
+.vscode/
+.env
+*.log
+
+data/raw/*
+data/processed/*
+data/sample/*
+!data/sample/.gitkeep
+
+spark-warehouse/
+metastore_db/

@@ -1,0 +1,11 @@
+pyspark==3.5.3
+pandas
+pyarrow
+pydantic
+PyYAML
+requests
+google-cloud-storage
+google-cloud-bigquery
+google-cloud-bigquery-storage
+pytest
+pytest-cov
