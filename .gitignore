@@ -14,3 +14,24 @@ data/sample/*
 
 spark-warehouse/
 metastore_db/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# Test and coverage reports
+.coverage
+htmlcov/
+
+# Local credentials
+*.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+*.json.key
+
+# Operating system files
+.DS_Store
+Thumbs.db
