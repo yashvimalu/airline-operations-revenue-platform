@@ -1,0 +1,111 @@
+dataset: flight_operations
+version: "1.0.0"
+
+description: >
+  Flight-level operational data containing scheduled
+  and actual flight movement information.
+
+grain: one record per scheduled flight instance
+
+primary_key:
+  - flight_id
+
+timestamp_timezone: UTC
+
+schema:
+  - name: flight_id
+    type: string
+    nullable: false
+
+  - name: flight_number
+    type: string
+    nullable: false
+
+  - name: airline_code
+    type: string
+    nullable: false
+
+  - name: origin_airport
+    type: string
+    nullable: false
+
+  - name: destination_airport
+    type: string
+    nullable: false
+
+  - name: scheduled_departure
+    type: timestamp
+    nullable: false
+
+  - name: actual_departure
+    type: timestamp
+    nullable: true
+
+  - name: scheduled_arrival
+    type: timestamp
+    nullable: false
+
+  - name: actual_arrival
+    type: timestamp
+    nullable: true
+
+  - name: flight_status
+    type: string
+    nullable: false
+
+  - name: aircraft_type
+    type: string
+    nullable: false
+
+  - name: capacity
+    type: integer
+    nullable: false
+
+  - name: flight_date
+    type: date
+    nullable: false
+
+  - name: ingestion_timestamp
+    type: timestamp
+    nullable: false
+
+validation_rules:
+  unique:
+    - flight_id
+
+  not_null:
+    - flight_id
+    - flight_number
+    - airline_code
+    - origin_airport
+    - destination_airport
+    - scheduled_departure
+    - scheduled_arrival
+    - flight_status
+    - aircraft_type
+    - capacity
+    - flight_date
+    - ingestion_timestamp
+
+  allowed_values:
+    flight_status:
+      - SCHEDULED
+      - DELAYED
+      - DEPARTED
+      - COMPLETED
+      - CANCELLED
+
+  regex:
+    origin_airport: "^[A-Z]{3}$"
+    destination_airport: "^[A-Z]{3}$"
+    airline_code: "^[A-Z0-9]{2}$"
+
+  numeric_constraints:
+    capacity:
+      min_exclusive: 0
+
+  cross_field_rules:
+    - origin_airport != destination_airport
+    - scheduled_arrival > scheduled_departure
+    - flight_status == CANCELLED implies actual_departure is null and actual_arrival is null
+    - flight_status == COMPLETED implies actual_departure is not null and actual_arrival is not null
