@@ -1,26 +1,22 @@
+environment: dev
+
 project:
   name: airline-operations-revenue-platform
-  environment: dev
 
-gcp:
-  project_id: YOUR_GCP_PROJECT_ID
-  region: asia-south1
-  storage_bucket: YOUR_GCS_BUCKET
+data_generation:
+  flight_count: 50000
+  booking_count: 100000
+  ticket_count: 100000
+  seed: 42
+  output_format: csv
 
-bigquery:
-  dataset: airline_dev
-  location: asia-south1
+storage:
+  raw_path: data/raw
+  processed_path: data/processed
+  sample_path: data/sample
 
 spark:
-  app_name: airline-data-processing
+  app_name: AirlineOperationsPlatform
   master: local[*]
-
-  executor_memory: 4g
-  driver_memory: 4g
-
-data:
-  start_date: "2025-01-01"
-  end_date: "2025-12-31"
-
-  target_volume_gb: 100
-  development_volume_gb: 2
+  log_level: WARN
+  shuffle_partitions: 8
