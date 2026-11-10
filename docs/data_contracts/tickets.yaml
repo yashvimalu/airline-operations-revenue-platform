@@ -1,0 +1,96 @@
+dataset: tickets
+version: "1.0.0"
+description: One record per passenger ticket for a flight.
+grain: one record per passenger ticket per flight
+
+primary_key:
+  - ticket_id
+
+timestamp_timezone: UTC
+
+schema:
+  - name: ticket_id
+    type: string
+    nullable: false
+
+  - name: booking_id
+    type: string
+    nullable: false
+
+  - name: flight_id
+    type: string
+    nullable: false
+
+  - name: passenger_id
+    type: string
+    nullable: false
+
+  - name: ticket_status
+    type: string
+    nullable: false
+
+  - name: cabin_class
+    type: string
+    nullable: false
+
+  - name: ticket_price
+    type: decimal(12,2)
+    nullable: false
+
+  - name: currency
+    type: string
+    nullable: false
+
+  - name: issued_timestamp
+    type: timestamp
+    nullable: false
+
+  - name: ingestion_timestamp
+    type: timestamp
+    nullable: false
+
+foreign_keys:
+  - column: booking_id
+    references:
+      dataset: bookings
+      column: booking_id
+
+  - column: flight_id
+    references:
+      dataset: flight_operations
+      column: flight_id
+
+validation_rules:
+  unique:
+    - ticket_id
+
+  not_null:
+    - ticket_id
+    - booking_id
+    - flight_id
+    - passenger_id
+    - ticket_status
+    - cabin_class
+    - ticket_price
+    - currency
+    - issued_timestamp
+    - ingestion_timestamp
+
+  allowed_values:
+    ticket_status:
+      - ISSUED
+      - CANCELLED
+      - REFUNDED
+
+    cabin_class:
+      - ECONOMY
+      - PREMIUM_ECONOMY
+      - BUSINESS
+      - FIRST
+
+  regex:
+    currency: "^[A-Z]{3}$"
+
+  numeric_constraints:
+    ticket_price:
+      min_inclusive: 0
