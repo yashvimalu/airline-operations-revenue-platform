@@ -1,0 +1,69 @@
+dataset: bookings
+version: "1.0.0"
+description: One record per airline booking.
+grain: one record per booking
+
+primary_key:
+  - booking_id
+
+timestamp_timezone: UTC
+
+schema:
+  - name: booking_id
+    type: string
+    nullable: false
+
+  - name: booking_timestamp
+    type: timestamp
+    nullable: false
+
+  - name: booking_status
+    type: string
+    nullable: false
+
+  - name: booking_channel
+    type: string
+    nullable: false
+
+  - name: currency
+    type: string
+    nullable: false
+
+  - name: total_amount
+    type: decimal(12,2)
+    nullable: false
+
+  - name: ingestion_timestamp
+    type: timestamp
+    nullable: false
+
+validation_rules:
+  unique:
+    - booking_id
+
+  not_null:
+    - booking_id
+    - booking_timestamp
+    - booking_status
+    - booking_channel
+    - currency
+    - total_amount
+    - ingestion_timestamp
+
+  allowed_values:
+    booking_status:
+      - CONFIRMED
+      - CANCELLED
+      - PENDING
+
+    booking_channel:
+      - WEBSITE
+      - MOBILE_APP
+      - TRAVEL_AGENT
+
+  regex:
+    currency: "^[A-Z]{3}$"
+
+  numeric_constraints:
+    total_amount:
+      min_inclusive: 0
