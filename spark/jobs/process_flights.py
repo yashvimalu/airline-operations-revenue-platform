@@ -1,9 +1,10 @@
 from pathlib import Path
 from pyspark.sql import SparkSession
+from data_quality.flight_validator import split_valid_invalid, validate_flights
 from ingestion.extractors.csv_reader import read_csv
 from scripts.config_loader import load_config
 from spark.transformations.schema_enforcement import apply_schema
-from spark.utils.schema_loader import load_flight_schema
+from spark.utils.schema_loader import load_contract, load_flight_schema
 from pyspark.sql import functions as F
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -68,6 +69,52 @@ def main():
         schema = load_flight_schema()
 
         typed_df = apply_schema(raw_df, schema)
+
+        contract_path = (
+            PROJECT_ROOT
+            / "docs"
+            / "data_contracts"
+            / "flight_operations.yaml"
+        )
+
+        contract = load_contract(contract_path)
+
+        validated_df = validate_flights(
+            typed_df,
+            contract,
+        )
+
+        valid_df, invalid_df = split_valid_invalid(
+            validated_df
+        )
+
+        print("\n=== DATA QUALITY RESULTS ===")
+
+        validated_df.groupBy("is_valid").count().show()
+
+        print("\n=== VALIDATION ERROR COUNTS ===")
+
+        (
+            invalid_df
+            .select(
+                F.explode("_validation_errors").alias("error_code")
+            )
+            .groupBy("error_code")
+            .count()
+            .orderBy(F.desc("count"))
+            .show(truncate=False)
+        )
+
+        raw_count = raw_df.count()
+        valid_count = valid_df.count()
+        invalid_count = invalid_df.count()
+
+        print(f"Raw records: {raw_count:,}")
+        print(f"Valid records: {valid_count:,}")
+        print(f"Invalid records: {invalid_count:,}")
+
+        assert raw_count == valid_count + invalid_count
+
 
         print("\n=== TYPED FLIGHT DATA ===")
         typed_df.printSchema()
