@@ -141,4 +141,9 @@ The test verifies that the local Spark environment can start and execute a basic
 - [ ] Data contracts defined
 - [ ] Synthetic data generators implemented
 - [ ] End-to-end pipeline implemented
+
+## Getting Started
+
+For local environment setup, data generation, and test
+execution, see [Local Setup Guide](docs/local_setup.md).
 ```
