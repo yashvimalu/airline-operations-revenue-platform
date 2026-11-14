@@ -9,11 +9,14 @@ data_generation:
   ticket_count: 100000
   seed: 42
   output_format: csv
+  start_date: "2026-01-01"
+  end_date: "2026-03-31"
 
 storage:
   raw_path: data/raw
   processed_path: data/processed
   sample_path: data/sample
+  airports_reference_path: data/sample/airports_reference.csv
 
 spark:
   app_name: AirlineOperationsPlatform
