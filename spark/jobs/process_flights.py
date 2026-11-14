@@ -1,10 +1,10 @@
 from pathlib import Path
-
 from pyspark.sql import SparkSession
-
 from ingestion.extractors.csv_reader import read_csv
 from scripts.config_loader import load_config
-
+from spark.transformations.schema_enforcement import apply_schema
+from spark.utils.schema_loader import load_flight_schema
+from pyspark.sql import functions as F
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -26,6 +26,7 @@ EXPECTED_COLUMNS = [
 ]
 
 
+
 def main():
     config = load_config()
 
@@ -41,6 +42,8 @@ def main():
         SparkSession.builder
         .appName(spark_config["app_name"])
         .master(spark_config["master"])
+        .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.ansi.enabled", "false")
         .config(
             "spark.sql.shuffle.partitions",
             str(spark_config.get("shuffle_partitions", 8)),
@@ -53,30 +56,43 @@ def main():
             spark_config.get("log_level", "WARN")
         )
 
-        flights_df = read_csv(
+        raw_df = read_csv(
             spark=spark,
             file_path=str(source_path),
             expected_columns=EXPECTED_COLUMNS,
         )
 
-        print("\n=== FLIGHT INGESTION ===")
+        print("\n=== RAW FLIGHT DATA ===")
+        raw_df.printSchema()
 
-        flights_df.printSchema()
+        schema = load_flight_schema()
 
-        record_count = flights_df.count()
+        typed_df = apply_schema(raw_df, schema)
 
-        print(f"Total records ingested: {record_count:,}")
+        print("\n=== TYPED FLIGHT DATA ===")
+        typed_df.printSchema()
 
-        if record_count == 0:
-            raise ValueError("Flight dataset has no records")
+        typed_df.show(5, truncate=False)
 
-        flights_df.show(5, truncate=False)
+        invalid_df = typed_df.filter(
+            F.size(F.col("_type_errors")) > 0
+        )
 
-        print("Flight ingestion completed successfully")
+        valid_df = typed_df.filter(
+            F.size(F.col("_type_errors")) == 0
+        )
+
+        raw_count = raw_df.count()
+        invalid_count = invalid_df.count()
+        valid_count = valid_df.count()
+
+        print(f"Raw records: {raw_count:,}")
+        print(f"Type-valid records: {valid_count:,}")
+        print(f"Type-invalid records: {invalid_count:,}")
+
+        assert raw_count == valid_count + invalid_count
 
     finally:
         spark.stop()
-
-
 if __name__ == "__main__":
     main()
