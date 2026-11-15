@@ -23,3 +23,7 @@ spark:
   master: local[*]
   log_level: WARN
   shuffle_partitions: 8
+
+transformations:
+  on_time_threshold_minutes: 15
+  earth_radius_km: 6371.0088

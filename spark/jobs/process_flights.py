@@ -3,7 +3,9 @@ from pyspark.sql import SparkSession
 from data_quality.flight_validator import split_valid_invalid, validate_flights
 from ingestion.extractors.csv_reader import read_csv
 from scripts.config_loader import load_config
+from spark.transformations.flight_metrics import transform_flights
 from spark.transformations.schema_enforcement import apply_schema
+from spark.utils.airport_reference import load_airport_reference
 from spark.utils.schema_loader import load_contract, load_flight_schema
 from pyspark.sql import functions as F
 
@@ -45,10 +47,7 @@ def main():
         .master(spark_config["master"])
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.ansi.enabled", "false")
-        .config(
-            "spark.sql.shuffle.partitions",
-            str(spark_config.get("shuffle_partitions", 8)),
-        )
+        .config("spark.sql.shuffle.partitions", str(spark_config.get("shuffle_partitions", 8)),)
         .getOrCreate()
     )
 
@@ -97,8 +96,7 @@ def main():
         (
             invalid_df
             .select(
-                F.explode("_validation_errors").alias("error_code")
-            )
+                F.explode("_validation_errors").alias("error_code"))
             .groupBy("error_code")
             .count()
             .orderBy(F.desc("count"))
@@ -128,6 +126,62 @@ def main():
         valid_df = typed_df.filter(
             F.size(F.col("_type_errors")) == 0
         )
+
+        transform_config = config.get("transformations", {})
+
+        airport_path = (
+            PROJECT_ROOT
+            / config["storage"]["airports_reference_path"]
+        )
+
+        airports_df = load_airport_reference(
+            spark,
+            str(airport_path),)
+
+        enriched_df = transform_flights(
+            flights=valid_df,
+            airports=airports_df,
+            threshold_minutes=transform_config.get(
+                "on_time_threshold_minutes", 15),
+            earth_radius_km=transform_config.get(
+                "earth_radius_km", 6371.0088),
+        )
+
+        print("\n=== ENRICHED FLIGHT DATA ===")
+
+        enriched_df.select(
+            "flight_id",
+            "origin_airport",
+            "destination_airport",
+            "departure_delay_minutes",
+            "arrival_delay_minutes",
+            "scheduled_duration_minutes",
+            "actual_duration_minutes",
+            "route_distance_km",
+            "is_departure_on_time",
+            "is_arrival_on_time",
+        ).show(10, truncate=False)
+
+        print("\n=== OPERATIONAL SUMMARY ===")
+
+        enriched_df.agg(
+            F.count("*").alias("total_flights"),
+            F.sum(
+                F.when(F.col("is_cancelled"), 1).otherwise(0)
+            ).alias("cancelled_flights"),
+            F.round(
+                F.avg("departure_delay_minutes"), 2
+            ).alias("avg_departure_delay_minutes"),
+            F.round(
+                F.avg("arrival_delay_minutes"), 2
+            ).alias("avg_arrival_delay_minutes"),
+            F.round(
+                F.avg(
+                    F.col("is_arrival_on_time").cast("double")
+                ) * 100,
+                2,
+            ).alias("arrival_on_time_pct"),
+        ).show(truncate=False)
 
         raw_count = raw_df.count()
         invalid_count = invalid_df.count()
