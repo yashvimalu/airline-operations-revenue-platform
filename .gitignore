@@ -35,3 +35,5 @@ htmlcov/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+data/checkpoints/
