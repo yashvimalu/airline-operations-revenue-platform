@@ -1,0 +1,20 @@
+environment: gcp
+
+project:
+  name: airline-data-eng-project
+  gcp_project_id: airline-data-eng-project-1234
+  region: asia-south1
+
+storage:
+  raw_path: gs://airline-data-eng-project-1234-airline-data/raw
+  processed_path: gs://airline-data-eng-project-1234-airline-data/curated
+  quarantine_path: gs://airline-data-eng-project-1234-airline-data/quarantine
+  airports_reference_path: gs://airline-data-eng-project-1234-airline-data/reference/airports_reference.csv
+
+spark:
+  app_name: AirlineOperationsPlatform
+  shuffle_partitions: 8
+
+transformations:
+  on_time_threshold_minutes: 15
+  earth_radius_km: 6371.0088

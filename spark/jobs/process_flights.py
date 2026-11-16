@@ -1,8 +1,10 @@
 from pathlib import Path
 from pyspark.sql import SparkSession
 from data_quality.flight_validator import split_valid_invalid, validate_flights
+from data_quality.quarantine import build_quarantine, get_quarantine_summary
 from ingestion.extractors.csv_reader import read_csv
 from scripts.config_loader import load_config
+from spark.transformations.flight_deduplication import deduplicate_flights
 from spark.transformations.flight_metrics import transform_flights
 from spark.transformations.schema_enforcement import apply_schema
 from spark.utils.airport_reference import load_airport_reference
@@ -45,11 +47,24 @@ def main():
         SparkSession.builder
         .appName(spark_config["app_name"])
         .master(spark_config["master"])
+        .config("spark.driver.memory", "4g")
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.ansi.enabled", "false")
         .config("spark.sql.shuffle.partitions", str(spark_config.get("shuffle_partitions", 8)),)
         .getOrCreate()
     )
+    checkpoint_dir = (
+    PROJECT_ROOT / "data" / "checkpoints"
+    )
+
+    checkpoint_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    # spark.sparkContext.setCheckpointDir(
+    #     str(checkpoint_dir)
+    # )
 
     try:
         spark.sparkContext.setLogLevel(
@@ -65,6 +80,15 @@ def main():
         print("\n=== RAW FLIGHT DATA ===")
         raw_df.printSchema()
 
+        raw_df = raw_df.withColumn(
+    "_raw_record",
+    F.struct(
+        *[
+            F.col(column).alias(column)
+            for column in raw_df.columns
+        ]
+    ),
+)
         schema = load_flight_schema()
 
         typed_df = apply_schema(raw_df, schema)
@@ -84,8 +108,45 @@ def main():
         )
 
         valid_df, invalid_df = split_valid_invalid(
-            validated_df
+            validated_df        )
+
+        valid_df = valid_df.localCheckpoint(eager=True)
+        invalid_df = invalid_df.localCheckpoint(eager=True)
+
+        # Deduplicate only records that passed quality checks.
+        deduplicated_df, duplicate_df = deduplicate_flights(
+            valid_df
         )
+
+        # Combine invalid and duplicate records.
+        quarantine_df = build_quarantine(
+            invalid_df,
+            duplicate_df,
+        )
+
+        print("\n=== AIR-19 RECONCILIATION ===")
+
+        raw_count = raw_df.count()
+        retained_count = deduplicated_df.count()
+        invalid_count = invalid_df.count()
+        duplicate_count = duplicate_df.count()
+        quarantine_count = quarantine_df.count()
+
+        print(f"Raw records:         {raw_count:,}")
+        print(f"Retained records:    {retained_count:,}")
+        print(f"Quality rejected:    {invalid_count:,}")
+        print(f"Duplicate rejected:  {duplicate_count:,}")
+        print(f"Total quarantined:   {quarantine_count:,}")
+
+        assert raw_count == retained_count + quarantine_count
+        assert quarantine_count == invalid_count + duplicate_count
+
+        print("\n=== QUARANTINE SUMMARY ===")
+
+        get_quarantine_summary(
+            quarantine_df
+        ).show(truncate=False)
+
 
         print("\n=== DATA QUALITY RESULTS ===")
 
@@ -139,14 +200,16 @@ def main():
             str(airport_path),)
 
         enriched_df = transform_flights(
-            flights=valid_df,
+            flights=deduplicated_df,
             airports=airports_df,
             threshold_minutes=transform_config.get(
-                "on_time_threshold_minutes", 15),
+                "on_time_threshold_minutes", 15
+            ),
             earth_radius_km=transform_config.get(
-                "earth_radius_km", 6371.0088),
+                "earth_radius_km", 6371.0088
+            ),
         )
-
+        
         print("\n=== ENRICHED FLIGHT DATA ===")
 
         enriched_df.select(

@@ -81,6 +81,10 @@ def apply_schema(raw_df: DataFrame, schema):
         *converted_columns,
         F.array(*error_columns).alias("_errors_raw"),
     )
+    extra_columns = []
+
+    if "_raw_record" in raw_df.columns:
+        extra_columns.append(F.col("_raw_record"))
 
     result = (
         result
@@ -93,5 +97,10 @@ def apply_schema(raw_df: DataFrame, schema):
         )
         .drop("_errors_raw")
     )
-
+    result = raw_df.select(
+    *converted_columns,
+    *extra_columns,
+    F.array(*error_columns).alias("_errors_raw"),
+)
+    
     return result
