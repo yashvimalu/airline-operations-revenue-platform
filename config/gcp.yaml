@@ -1,7 +1,7 @@
 environment: gcp
 
 project:
-  name: airline-data-eng-project
+  name: airline-operations-revenue-platform
   gcp_project_id: airline-data-eng-project-1234
   region: asia-south1
 
@@ -18,3 +18,8 @@ spark:
 transformations:
   on_time_threshold_minutes: 15
   earth_radius_km: 6371.0088
+
+output:
+  write_mode: overwrite
+  curated_dataset: flights
+  quarantine_dataset: flights
