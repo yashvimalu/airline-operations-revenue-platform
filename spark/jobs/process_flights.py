@@ -2,6 +2,7 @@ from pathlib import Path
 from pyspark.sql import SparkSession
 from data_quality.flight_validator import split_valid_invalid, validate_flights
 from data_quality.quarantine import build_quarantine, get_quarantine_summary
+from data_quality.reconciliation import reconcile_flights
 from ingestion.extractors.csv_reader import read_csv
 from scripts.config_loader import load_config
 from spark.transformations.flight_deduplication import deduplicate_flights
@@ -290,7 +291,16 @@ def main(config_path="config/dev.yaml"):
         assert raw_count == curated_count + quarantine_count, (
             "Reconciliation failed before storage"
         )
-
+                
+        reconciliation = reconcile_flights(
+            raw_df=raw_df,
+            curated_df=enriched_df,
+            invalid_df=invalid_df,
+            duplicate_df=duplicate_df,
+            quarantine_df=quarantine_df,
+        )
+        print("Reconciliation passed:", reconciliation)
+        
         paths = persist_flight_datasets(
             spark=spark,
             curated_df=enriched_df,
