@@ -12,10 +12,15 @@ def read_csv(
 ) -> DataFrame:
     """Read a validated local CSV into a Spark DataFrame."""
 
-    validated_path = validate_source_file(
-        file_path,
-        expected_columns=expected_columns,
-    )
+    if file_path.startswith("gs://"):
+        validated_path = file_path
+    else:
+        validated_path = str(
+            validate_source_file(
+                file_path,
+                expected_columns=expected_columns,
+            )
+        )
 
     df = (
         spark.read

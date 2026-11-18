@@ -11,6 +11,8 @@ from spark.utils.airport_reference import load_airport_reference
 from spark.utils.schema_loader import load_contract, load_flight_schema
 from pyspark.sql import functions as F
 
+from spark.utils.storage_manager import persist_flight_datasets
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 EXPECTED_COLUMNS = [
@@ -31,14 +33,35 @@ EXPECTED_COLUMNS = [
 ]
 
 
+def resolve_storage_path(path_value: str) -> str:
+    """Keep cloud URIs intact; resolve local paths."""
 
-def main():
-    config = load_config()
+    if path_value.startswith("gs://"):
+        return path_value
+
+    path = Path(path_value)
+
+    if path.is_absolute():
+        return str(path)
+
+    return str(PROJECT_ROOT / path)
+
+def main(config_path="config/dev.yaml"):
+    config = load_config(config_path)
 
     source_path = (
         PROJECT_ROOT
         / config["storage"]["raw_path"]
         / "flights.csv"
+    )
+
+    raw_file_path = resolve_storage_path(
+        config["storage"]["raw_path"].rstrip("/")
+        + "/flights/flights.csv"
+    )
+
+    airport_file_path = resolve_storage_path(
+        config["storage"]["airports_reference_path"]
     )
 
     spark_config = config["spark"]
@@ -256,7 +279,45 @@ def main():
 
         assert raw_count == valid_count + invalid_count
 
+
+        print("\n=== AIR-20 PERSISTING DATASETS ===")
+
+        # Confirm the final record counts before writing.
+        raw_count = raw_df.count()
+        curated_count = enriched_df.count()
+        quarantine_count = quarantine_df.count()
+
+        assert raw_count == curated_count + quarantine_count, (
+            "Reconciliation failed before storage"
+        )
+
+        paths = persist_flight_datasets(
+            spark=spark,
+            curated_df=enriched_df,
+            quarantine_df=quarantine_df,
+            config=config,
+        )
+
+        print("\nAIR-20 completed successfully.")
+        print(f"Curated dataset: {paths.curated}")
+        print(f"Quarantine dataset: {paths.quarantine}")
+
     finally:
         spark.stop()
+
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--config",
+        default="config/dev.yaml",
+        help="Path to YAML configuration",
+    )
+
+    args = parser.parse_args()
+
+    main(config_path=args.config)
