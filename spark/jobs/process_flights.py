@@ -1,4 +1,5 @@
 from pathlib import Path
+from pyspark import SparkFiles
 from pyspark.sql import SparkSession
 from data_quality.flight_validator import split_valid_invalid, validate_flights
 from data_quality.quarantine import build_quarantine, get_quarantine_summary
@@ -33,6 +34,21 @@ EXPECTED_COLUMNS = [
     "ingestion_timestamp",
 ]
 
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Local path to staged YAML config",
+    )
+    parser.add_argument(
+        "--contract",
+        required=True,
+        help="Local path to staged flight contract",
+    )
+    return parser.parse_args()
 
 def resolve_storage_path(path_value: str) -> str:
     """Keep cloud URIs intact; resolve local paths."""
@@ -47,8 +63,27 @@ def resolve_storage_path(path_value: str) -> str:
 
     return str(PROJECT_ROOT / path)
 
-def main(config_path="config/dev.yaml"):
+def resolve_runtime_file(path: str) -> str:
+    """Resolve a file distributed with spark-submit."""
+    candidate = Path(path)
+
+    if candidate.is_file():
+        return str(candidate)
+
+    staged = Path(SparkFiles.get(candidate.name))
+
+    if staged.is_file():
+        return str(staged)
+
+    raise FileNotFoundError(
+        f"Runtime file not found: {path}"
+    )
+
+def main(config_path: str, contract_path: str):
+
     config = load_config(config_path)
+    contract = load_contract(contract_path)
+
 
     source_path = (
         PROJECT_ROOT
@@ -85,6 +120,24 @@ def main(config_path="config/dev.yaml"):
         parents=True,
         exist_ok=True,
     )
+
+    config_path = SparkFiles.get("gcp.yaml")
+    contract_path = SparkFiles.get("flight_operations.yaml")
+
+    print(f"Resolved config path: {config_path}")
+    print(f"Resolved contract path: {contract_path}")
+
+    if not Path(config_path).is_file():
+        raise FileNotFoundError(
+            f"Distributed configuration file not found: {config_path}"
+        )
+
+    if not Path(contract_path).is_file():
+        raise FileNotFoundError(
+            f"Distributed contract file not found: {contract_path}"
+        )
+
+    config = load_config(config_path)
 
     # spark.sparkContext.setCheckpointDir(
     #     str(checkpoint_dir)
@@ -318,16 +371,8 @@ def main(config_path="config/dev.yaml"):
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--config",
-        default="config/dev.yaml",
-        help="Path to YAML configuration",
+    args = parse_args()
+    main(
+        config_path=resolve_runtime_file(args.config),
+        contract_path=resolve_runtime_file(args.contract),
     )
-
-    args = parser.parse_args()
-
-    main(config_path=args.config)
