@@ -135,14 +135,16 @@ def build_spark_schema(contract):
 
     return StructType(fields)
 
+def load_flight_schema(contract_path=None):
+    """Load flight schema from a supplied contract or local default."""
 
-def load_flight_schema():
-    contract_path = (
-        PROJECT_ROOT
-        / "docs"
-        / "data_contracts"
-        / "flight_operations.yaml"
-    )
+    if contract_path is None:
+        contract_path = (
+            PROJECT_ROOT
+            / "docs"
+            / "data_contracts"
+            / "flight_operations.yaml"
+        )
 
     contract = load_contract(contract_path)
 

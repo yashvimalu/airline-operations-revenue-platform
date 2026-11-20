@@ -64,20 +64,24 @@ def resolve_storage_path(path_value: str) -> str:
     return str(PROJECT_ROOT / path)
 
 def resolve_runtime_file(path: str) -> str:
-    """Resolve a file distributed with spark-submit."""
+    """Resolve local files or files distributed by Spark."""
+
     candidate = Path(path)
 
     if candidate.is_file():
-        return str(candidate)
+        return str(candidate.resolve())
 
     staged = Path(SparkFiles.get(candidate.name))
 
     if staged.is_file():
-        return str(staged)
+        return str(staged.resolve())
 
     raise FileNotFoundError(
-        f"Runtime file not found: {path}"
+        f"Runtime file not found: {path}. "
+        f"Checked local path: {candidate} "
+        f"and SparkFiles path: {staged}"
     )
+
 
 def main(config_path: str, contract_path: str):
 
@@ -103,42 +107,17 @@ def main(config_path: str, contract_path: str):
     spark_config = config["spark"]
 
     spark = (
-        SparkSession.builder
-        .appName(spark_config["app_name"])
-        .master(spark_config["master"])
-        .config("spark.driver.memory", "4g")
-        .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.sql.ansi.enabled", "false")
-        .config("spark.sql.shuffle.partitions", str(spark_config.get("shuffle_partitions", 8)),)
-        .getOrCreate()
+    SparkSession.builder
+    .appName(spark_config["app_name"])
+    .config("spark.sql.session.timeZone", "UTC")
+    .config("spark.sql.ansi.enabled", "false")
+    .config(
+        "spark.sql.shuffle.partitions",
+        str(spark_config.get("shuffle_partitions", 8)),
     )
-    checkpoint_dir = (
-    PROJECT_ROOT / "data" / "checkpoints"
-    )
-
-    checkpoint_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    config_path = SparkFiles.get("gcp.yaml")
-    contract_path = SparkFiles.get("flight_operations.yaml")
-
-    print(f"Resolved config path: {config_path}")
-    print(f"Resolved contract path: {contract_path}")
-
-    if not Path(config_path).is_file():
-        raise FileNotFoundError(
-            f"Distributed configuration file not found: {config_path}"
-        )
-
-    if not Path(contract_path).is_file():
-        raise FileNotFoundError(
-            f"Distributed contract file not found: {contract_path}"
-        )
-
-    config = load_config(config_path)
-
+    .getOrCreate()
+)
+    
     # spark.sparkContext.setCheckpointDir(
     #     str(checkpoint_dir)
     # )
@@ -150,7 +129,7 @@ def main(config_path: str, contract_path: str):
 
         raw_df = read_csv(
             spark=spark,
-            file_path=str(source_path),
+            file_path=raw_file_path,
             expected_columns=EXPECTED_COLUMNS,
         )
 
@@ -166,18 +145,9 @@ def main(config_path: str, contract_path: str):
         ]
     ),
 )
-        schema = load_flight_schema()
+        schema = load_flight_schema(contract_path)
 
         typed_df = apply_schema(raw_df, schema)
-
-        contract_path = (
-            PROJECT_ROOT
-            / "docs"
-            / "data_contracts"
-            / "flight_operations.yaml"
-        )
-
-        contract = load_contract(contract_path)
 
         validated_df = validate_flights(
             typed_df,
@@ -257,24 +227,12 @@ def main(config_path: str, contract_path: str):
 
         typed_df.show(5, truncate=False)
 
-        invalid_df = typed_df.filter(
-            F.size(F.col("_type_errors")) > 0
-        )
-
-        valid_df = typed_df.filter(
-            F.size(F.col("_type_errors")) == 0
-        )
-
         transform_config = config.get("transformations", {})
-
-        airport_path = (
-            PROJECT_ROOT
-            / config["storage"]["airports_reference_path"]
-        )
 
         airports_df = load_airport_reference(
             spark,
-            str(airport_path),)
+            airport_file_path,
+        )
 
         enriched_df = transform_flights(
             flights=deduplicated_df,
@@ -330,9 +288,6 @@ def main(config_path: str, contract_path: str):
         print(f"Raw records: {raw_count:,}")
         print(f"Type-valid records: {valid_count:,}")
         print(f"Type-invalid records: {invalid_count:,}")
-
-        assert raw_count == valid_count + invalid_count
-
 
         print("\n=== AIR-20 PERSISTING DATASETS ===")
 

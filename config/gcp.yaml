@@ -5,14 +5,24 @@ project:
   gcp_project_id: airline-data-eng-project-1234
   region: asia-south1
 
+data_generation:
+  flight_count: 100
+  booking_count: 100
+  ticket_count: 100
+  seed: 42
+  output_format: csv
+
 storage:
   raw_path: gs://airline-data-eng-project-1234-airline-data/raw
   processed_path: gs://airline-data-eng-project-1234-airline-data/curated
+  sample_path: gs://airline-data-eng-project-1234-airline-data/sample
   quarantine_path: gs://airline-data-eng-project-1234-airline-data/quarantine
   airports_reference_path: gs://airline-data-eng-project-1234-airline-data/reference/airports_reference.csv
 
 spark:
   app_name: AirlineOperationsPlatform
+  master: local[*]
+  log_level: WARN
   shuffle_partitions: 8
 
 transformations:
